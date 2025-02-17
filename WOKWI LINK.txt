@@ -1,0 +1,88 @@
+https://wokwi.com/projects/419007284903216129
+
+#include "arduino_secrets.h"
+#include "thingProperties.h"
+#include <Wire.h>
+
+#define MPU6050_ADDR 0x68 // Adresse I2C du MPU6050
+#define ACCEL_XOUT_H 0x3B // Registre des données X de l'accéléromètre
+
+
+
+void setup() {
+  // Initialisation du port série
+  Serial.begin(115200);
+  delay(1500); // Attendre que le moniteur série s'ouvre
+  
+  // Initialisation de l'I2C
+  Wire.begin();
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(0x6B); // Registre "Power Management 1"
+  Wire.write(0);    // Réveiller le capteur
+  if (Wire.endTransmission(true) != 0) {
+    Serial.println("Erreur : Impossible de communiquer avec le MPU6050 !");
+    while (1); // Bloque l'exécution si le capteur n'est pas détecté
+  }
+  
+  // Initialisation des propriétés Arduino Cloud
+  initProperties();
+  ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+  
+  // Définir le niveau de débogage
+  setDebugMessageLevel(2);
+  ArduinoCloud.printDebugInfo();
+
+  Serial.println("MPU6050 initialisé avec succès !");
+}
+
+void loop() {
+  // Mise à jour d'Arduino Cloud
+  ArduinoCloud.update();
+  
+  // Lire les données brutes de l'accéléromètre
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(ACCEL_XOUT_H); // Adresse du premier registre
+  if (Wire.endTransmission(false) != 0) {
+    Serial.println("Erreur : Impossible de lire les données du MPU6050 !");
+    return; // Sortir si la communication échoue
+  }
+  
+  // Demander 6 octets (X, Y, Z)
+  Wire.requestFrom(MPU6050_ADDR, 6, true);
+  if (Wire.available() < 6) {
+    Serial.println("Erreur : Données incomplètes reçues du MPU6050 !");
+    return; // Sortir si les données ne sont pas complètes
+  }
+
+  // Extraire les données brutes
+  int16_t rawX = (Wire.read() << 8) | Wire.read();
+  int16_t rawY = (Wire.read() << 8) | Wire.read();
+  int16_t rawZ = (Wire.read() << 8) | Wire.read();
+
+  // Convertir les données en "g" (1 g = 9.81 m/s²)
+  accX = rawX / 16384.0;
+  accY = rawY / 16384.0;
+  accZ = rawZ / 16384.0;
+
+  // Afficher dans le Moniteur Série
+  Serial.print("AccX: "); Serial.print(accX, 2); Serial.print(" g, ");
+  Serial.print("AccY: "); Serial.print(accY, 2); Serial.print(" g, ");
+  Serial.print("AccZ: "); Serial.println(accZ, 2); // Limite à 2 décimales
+
+  delay(1000); // Pause entre les lectures
+}
+
+/*
+  Since Alert is READ_WRITE variable, onAlertChange() is
+  executed every time a new value is received from IoT Cloud.
+*/
+void onAlertChange()  {
+  // Add your code here to act upon Alert change
+}
+/*
+  Since AccZ is READ_WRITE variable, onAccZChange() is
+  executed every time a new value is received from IoT Cloud.
+*/
+void onAccZChange()  {
+  // Add your code here to act upon AccZ change
+}
